@@ -4,7 +4,13 @@ import math
 from skimage import filters
 import scipy.ndimage as nd
 import scipy
+from scipy.ndimage import gaussian_filter
 
+#def imReadAndConvert(filename: str, representation: int) -> np.ndarray:
+    #im = cv2.imread(filename, representation-1)
+    #im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+    #im = im/np.max(im)
+    #return im
 def imReadAndConvert(filename: str, representation: int) -> np.ndarray:
     # reading the image
     src = cv2.imread(filename)
@@ -13,12 +19,8 @@ def imReadAndConvert(filename: str, representation: int) -> np.ndarray:
         image = cv2.cvtColor(src, cv2.COLOR_RGB2GRAY)
     else:
         image = cv2.cvtColor(src, cv2.COLOR_BGR2RGB)
-    # normelize
-    xmax, xmin = image.max(), image.min()
-    image = (image - xmin) / (xmax - xmin)
 
     return image
-
 
 
 def conv_trans1d(image):
@@ -32,26 +34,27 @@ def conv_trans1d(image):
 
 #https://www.youtube.com/watch?v=BPBTmXKtFRQ
 def conv1D(inSignal:np.ndarray,kernel1:np.ndarray)->np.ndarray:
-    kernel1 = conv_trans1d(kernel1)
-    image_h = inSignal.shape[0]
+    length = len(inSignal) + len(kernel1) - 1
+    copied = np.copy(inSignal)
+    copied = np.resize(copied, length)
+    i = length - len(inSignal)
+    while (i < length):
+        copied[i] = 0
+        i = i + 1
 
-    kernel_h = kernel1.shape[0]
+    ans = []
+    i = 0
+    j = 0
+    sum = 0
 
-    h = kernel_h // 2
+    for j in range(length):
+        for i in range(len(inSignal) - 1):
+            sum = sum + copied[j - i] * kernel1[i]
 
-    image_conv = np.zeros(inSignal.shape)
-
-    for i in range(h, image_h - h):
-
+        ans.append(sum)
         sum = 0
 
-        for m in range(kernel_h):
-
-            sum = sum + kernel1[m] * inSignal[i - h + m]
-
-            image_conv[i] = sum
-
-    return image_conv
+    return ans
 
 
 
@@ -66,27 +69,48 @@ def conv_trans2d(image):
 
 #https://www.youtube.com/watch?v=BPBTmXKtFRQ
 def conv2D(inImage: np.ndarray, kernel2: np.ndarray) -> np.ndarray:
-    kernel2 = conv_trans2d(kernel2)
     image_h = inImage.shape[0]
     image_w = inImage.shape[1]
 
-    kernel_h = kernel2.shape[0]
-    kernel_w = kernel2.shape[1]
+    if np.size(np.shape(kernel2)) == 1:
+        kernel = conv_trans1d(kernel2)
+        kernel_h = kernel.shape[0]
+        kernel_w = 1
 
-    h = kernel_h//2
-    w = kernel_w//2
+        h = kernel_h//2
+        w = kernel_w//2
 
-    image_conv = np.zeros(inImage.shape)
+        image_conv = np.zeros(inImage.shape)
 
-    for i in range(h,image_h - h):
-        for j in range(w, image_w - w):
-            sum = 0
+        for i in range(h,image_h - h):
+            for j in range(w, image_w - w):
+                sum = 0
 
-            for m in range(kernel_h):
-                for n in range(kernel_w):
-                    sum = sum + kernel2[m][n]*inImage[i-h+m][j-w+n]
+                for m in range(kernel_h):
+                    for n in range(1):
+                        sum = sum + kernel[m] + inImage[i - h + m][j - w + n]
 
-            image_conv[i][j] = sum
+                image_conv[i][j] = sum
+
+    if np.size(np.shape(kernel2)) == 2:
+        kernel = conv_trans2d(kernel2)
+        kernel_h = kernel.shape[0]
+        kernel_w = kernel.shape[1]
+
+        h = kernel_h // 2
+        w = kernel_w // 2
+
+        image_conv = np.zeros(inImage.shape)
+
+        for i in range(h, image_h - h):
+            for j in range(w, image_w - w):
+                sum = 0
+
+                for m in range(kernel_h):
+                    for n in range(kernel_w):
+                        sum = sum + kernel[m][n] + inImage[i - h + m][j - w + n]
+
+                image_conv[i][j] = sum
 
 
     return image_conv
@@ -106,11 +130,14 @@ def convDerivative(inImage:np.ndarray) -> (np.ndarray,np.ndarray,np.ndarray,np.n
     x_der = cv2.filter2D(inImage, cv2.CV_8U, kernelx)
     y_der = cv2.filter2D(inImage, cv2.CV_8U, kernely)
 
-    directions = math.sqrt(math.pow(x_der, 2) + math.pow(y_der, 2))
+    #x_der = np.vectorize(x_der)
+    #y_der = np.vectorize(y_der)
+    magnitude = math.sqrt(math.pow(x_der, 2) + math.pow(y_der, 2))
 
-    magnitude = np.arctan(y_der / x_der)
+    directions = np.arctan(y_der / x_der)
 
     return (directions, magnitude, x_der, y_der)
+
 
 
 
@@ -135,7 +162,7 @@ def blurImage2(in_image: np.ndarray, kernel_size: np.ndarray) -> np.ndarray:
 
 
 def norm(img1: np.ndarray, img2: np.ndarray,thresh: float):
-    img_copy = np.zeros(img1.shape[0])
+    img_copy = np.zeros(img1.shape)
 
     for i in range(img1.shape[0]):
         for j in range(img1.shape[1]):
@@ -150,6 +177,7 @@ def norm(img1: np.ndarray, img2: np.ndarray,thresh: float):
 
 #https://www.youtube.com/watch?v=Ie2Tj_3Ug2A
 def edgeDetectionSobel(img: np.ndarray, thresh: float = 0.7)-> (np.ndarray, np.ndarray):
+
     kernel = np.zeros(shape = (3,3))
     kernel[0,0] = -1
     kernel[0, 1] = -2
@@ -183,7 +211,6 @@ def edgeDetectionSobel(img: np.ndarray, thresh: float = 0.7)-> (np.ndarray, np.n
     sobel = np.hypot(gxcv, gxcv)
 
     return (sobel,myans)
-
 
 #https://books.google.co.il/books?id=-9_dDwAAQBAJ&pg=PA73&lpg=PA73&dq=edge+detection+zero+crossing+python+code+implement&source=bl&ots=TXm8NUN-GG&sig=ACfU3U0x7QALvrgSGZ1oGEnFPpqx6pjufw&hl=iw&sa=X&ved=2ahUKEwjHhoWc1M_pAhUGcBQKHRLmA6MQ6AEwEXoECAoQAQ#v=onepage&q=edge%20detection%20zero%20crossing%20python%20code%20implement&f=false
 #https://www.mathworks.com/help/images/ref/edge.html
@@ -260,28 +287,30 @@ def non_max_suppression(gradient_magnitude, gradient_direction):
 # https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_canny/py_canny.html
 # https://scikit-image.org/docs/dev/auto_examples/filters/plot_hysteresis.html
 def edgeDetectionCanny(img: np.ndarray, thrs_1: float, thrs_2: float)-> (np.ndarray, np.ndarray):
-    filltered = cv2.getGaussianKernel(img)
-    (directions, magnitude,x_der,y_der) = convDerivative(filltered)
-    arr = non_max_suppression(magnitude,directions)
+
     if(thrs_1>thrs_2) :
         high = thrs_1
         low = thrs_2
     else:
         high = thrs_2
         low = thrs_1
+
+    filltered = gaussian_filter(img, sigma=1)
+    (directions, magnitude, x_der, y_der) = convDerivative(filltered)
+    arr = non_max_suppression(magnitude, directions)
+
     myans = filters.apply_hysteresis_threshold(arr, low, high)
 
 
-    cvans = cv2.Canny(img)
+    cvans = cv2.Canny(img,low,high)
 
     return (cvans, myans)
 
 
 
 def smoothen(img):
-    gaussian = np.array([[1/16.,1/8.,1/16.],[1/8.,1/4.,1/8.],[1/16.,1/8.,1/16.]])
-    img.load(img.convolve(gaussian))
-    return img
+
+    return cv2.Canny(img,100,150)
 
 def edge(img,threshold):
     laplacian = np.array([[1,1,1],[1,-8,1],[1,1,1]])
