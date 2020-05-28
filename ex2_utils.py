@@ -6,22 +6,43 @@ import scipy.ndimage as nd
 import scipy
 from scipy.ndimage import gaussian_filter
 
-#def imReadAndConvert(filename: str, representation: int) -> np.ndarray:
-    #im = cv2.imread(filename, representation-1)
-    #im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-    #im = im/np.max(im)
-    #return im
+# def imReadAndConvert(filename: str, representation: int) -> np.ndarray:
+#     im = cv2.imread(filename, representation-1)
+#     im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+#     im = im/np.max(im)
+#     return im
+# def imReadAndConvert(filename: str, representation: int) -> np.ndarray:
+#
+#     src = cv2.imread(filename)
+#
+#     if (representation == 1):
+#         image = cv2.cvtColor(src, cv2.COLOR_RGB2GRAY)
+#     else:
+#         image = cv2.cvtColor(src, cv2.COLOR_BGR2RGB)
+#
+#     return image
+
 def imReadAndConvert(filename: str, representation: int) -> np.ndarray:
-    # reading the image
-    src = cv2.imread(filename)
+    """
+    Reads an image, and returns the image converted as requested
+    :param filename: The path to the image
+    :param representation: GRAY_SCALE or RGB
+    :return: The image object
+    """
+    if representation == 1:
+        img = cv2.imread(filename, 0)
+        data = np.asarray(img)
 
-    if (representation == 1):
-        image = cv2.cvtColor(src, cv2.COLOR_RGB2GRAY)
+    elif representation == 2:
+        img = cv2.imread(filename)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        data = np.asarray(img_rgb)
+
     else:
-        image = cv2.cvtColor(src, cv2.COLOR_BGR2RGB)
+        return None
 
-    return image
-
+    normal_data = data.min()+((data-data.min())/(data.max()-data.min()))
+    return normal_data
 
 def conv_trans1d(image):
     image_copy = image.copy()
@@ -34,28 +55,21 @@ def conv_trans1d(image):
 
 #https://www.youtube.com/watch?v=BPBTmXKtFRQ
 def conv1D(inSignal:np.ndarray,kernel1:np.ndarray)->np.ndarray:
-    length = len(inSignal) + len(kernel1) - 1
-    copied = np.copy(inSignal)
-    copied = np.resize(copied, length)
-    i = length - len(inSignal)
-    while (i < length):
-        copied[i] = 0
-        i = i + 1
-
-    ans = []
-    i = 0
-    j = 0
+    arr = []
     sum = 0
+    copied = np.resize(inSignal, len(inSignal) + len(kernel1) - 1)
+    i = len(kernel1) - 1
+    while (len(copied) > i):
+        copied[i] = 0
+        i += 1
 
-    for j in range(length):
-        for i in range(len(inSignal) - 1):
-            sum = sum + copied[j - i] * kernel1[i]
-
-        ans.append(sum)
+    for j in range(len(inSignal) + len(kernel1) - 1):
+        for k in range(len(inSignal) - 1):
+            sum = sum + kernel1[k] * copied[j - k]
+        arr.append(sum)
         sum = 0
 
-    return ans
-
+    return arr
 
 
 def conv_trans2d(image):
@@ -116,28 +130,23 @@ def conv2D(inImage: np.ndarray, kernel2: np.ndarray) -> np.ndarray:
     return image_conv
 
 
-#https://stackoverflow.com/questions/49732726/how-to-compute-the-gradients-of-image-using-python
+# https://stackoverflow.com/questions/49732726/how-to-compute-the-gradients-of-image-using-python
 def convDerivative(inImage:np.ndarray) -> (np.ndarray,np.ndarray,np.ndarray,np.ndarray):
-    #x_der = np.convolve(inImage.shape[0], [1,0,-1],mode='full')
-    #y_der = np.convolve(inImage.shape[1], np.transpose([1, 0, -1]),mode='full')
-    #directions = math.sqrt(math.pow(x_der,2) + math.pow(y_der,2))
-    #magnitude = np.arctan(y_der/x_der)
-    #return (directions, magnitude,x_der,y_der)
+    new_img = np.copy(inImage)
+    kernelx = np.array([-1, 0, 1])
+    kernely = np.array([[-1], [0], [1]])
 
-    kernely = np.array([[1, 1, 1], [0, 0, 0], [-1, -1, -1]])
-    kernelx = np.array([[1, 0, -1], [1, 0, -1], [1, 0, -1]])
+    x_der = cv2.filter2D(new_img, cv2.CV_64F, kernelx)
+    y_der = cv2.filter2D(new_img, cv2.CV_64F, kernely)
 
-    x_der = cv2.filter2D(inImage, cv2.CV_8U, kernelx)
-    y_der = cv2.filter2D(inImage, cv2.CV_8U, kernely)
-
-    #x_der = np.vectorize(x_der)
-    #y_der = np.vectorize(y_der)
-    magnitude = math.sqrt(math.pow(x_der, 2) + math.pow(y_der, 2))
-
-    directions = np.arctan(y_der / x_der)
-
-    return (directions, magnitude, x_der, y_der)
-
+    magnitude = np.zeros(np.shape(new_img))
+    directions = np.zeros(np.shape(new_img))
+    h_img, w_img = np.shape(new_img)
+    for i in range(h_img - 1):
+        for j in range(w_img-1):
+            magnitude[i][j] = math.sqrt(pow(x_der[i][j], 2)[0] + pow(y_der[i][j], 2)[0])
+            directions[i][j] = np.arctan(np.divide(y_der[i][j], x_der[i][j], where=x_der[i][j] != 0))
+    return directions, magnitude, x_der, y_der
 
 
 
@@ -188,7 +197,7 @@ def edgeDetectionSobel(img: np.ndarray, thresh: float = 0.7)-> (np.ndarray, np.n
     kernel[2, 0] = 1
     kernel[2, 1] = 2
     kernel[2, 2] = 1
-    gy = cv2.filter2D(img,kernel, borderType=cv2.BORDER_REPLICATE)
+    gy = conv2D(img,kernel)
 
     kernel2 = np.zeros(shape=(3, 3))
     kernel2[0, 0] = -1
@@ -200,24 +209,32 @@ def edgeDetectionSobel(img: np.ndarray, thresh: float = 0.7)-> (np.ndarray, np.n
     kernel2[2, 0] = -2
     kernel2[2, 1] = 0
     kernel2[2, 2] = 2
-    gx = cv2.filter2D(img,kernel2, borderType=cv2.BORDER_REPLICATE)
+    gx = conv2D(img,kernel2)
 
     myans = norm(gx,gy,thresh)
 
-    gxcv = img.sobel(img, axis=0, mode='constant', Ksize=thresh)
+    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=1)
+    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=1)
 
-    gxcv = img.sobel(img, axis=1, mode='constant', Ksize=thresh)
-
-    sobel = np.hypot(gxcv, gxcv)
+    sobel = np.hypot(sobelx, sobely)
 
     return (sobel,myans)
 
 #https://books.google.co.il/books?id=-9_dDwAAQBAJ&pg=PA73&lpg=PA73&dq=edge+detection+zero+crossing+python+code+implement&source=bl&ots=TXm8NUN-GG&sig=ACfU3U0x7QALvrgSGZ1oGEnFPpqx6pjufw&hl=iw&sa=X&ved=2ahUKEwjHhoWc1M_pAhUGcBQKHRLmA6MQ6AEwEXoECAoQAQ#v=onepage&q=edge%20detection%20zero%20crossing%20python%20code%20implement&f=false
 #https://www.mathworks.com/help/images/ref/edge.html
-def edgeDetectionZeroCrossingSimple(img: np.ndarray) -> (np.ndarray):
-    ans = edge(img, 'zerocross');
-
-    return ans
+def edgeDetectionZeroCrossingSimple(img:np.ndarray)->(np.ndarray):
+    #we were not sure if the color that should be inside is the black one or the white one
+    #we took the white inside
+    sample = gaussian_filter(img, sigma=2)
+    # kernel = np.array([[-1, -1, -1],
+    #                    [-1, 8, -1],
+    #                    [-1, -1, -1]])
+    kernel = np.array([[0, 1, 0],
+                       [1, -4, 1],
+                       [0, 1, 0]])
+    # kernel3 = np.multiply(kernel , kernel2)
+    answer = cv2.filter2D(sample, -1, kernel)
+    return answer
 
 
 #https://github.com/debikadutt/Edge-Detection-using-LoG-and-DoG/blob/master/LoG.py#L8
@@ -243,103 +260,79 @@ def edgeDetectionZeroCrossingLOG(img: np.ndarray) -> (np.ndarray):
 
     return  output
 
-
-
-
-
-
-
-def non_max_suppression(gradient_magnitude, gradient_direction):
-        image_row, image_col = gradient_magnitude.shape
-
-        output = np.zeros(gradient_magnitude.shape)
-
-        PI = 180
-
-        for row in range(1, image_row - 1):
-            for col in range(1, image_col - 1):
-                direction = gradient_direction[row, col]
-
-                if (0 <= direction < PI / 8) or (15 * PI / 8 <= direction <= 2 * PI):
-                    before_pixel = gradient_magnitude[row, col - 1]
-                    after_pixel = gradient_magnitude[row, col + 1]
-
-                elif (PI / 8 <= direction < 3 * PI / 8) or (9 * PI / 8 <= direction < 11 * PI / 8):
-                    before_pixel = gradient_magnitude[row + 1, col - 1]
-                    after_pixel = gradient_magnitude[row - 1, col + 1]
-
-                elif (3 * PI / 8 <= direction < 5 * PI / 8) or (11 * PI / 8 <= direction < 13 * PI / 8):
-                    before_pixel = gradient_magnitude[row - 1, col]
-                    after_pixel = gradient_magnitude[row + 1, col]
-
-                else:
-                    before_pixel = gradient_magnitude[row - 1, col - 1]
-                    after_pixel = gradient_magnitude[row + 1, col + 1]
-
-                if gradient_magnitude[row, col] >= before_pixel and gradient_magnitude[row, col] >= after_pixel:
-                    output[row, col] = gradient_magnitude[row, col]
-
-
-        return output
-
-
 # http://www.adeveloperdiary.com/data-science/computer-vision/implement-canny-edge-detector-using-python-from-scratch/
 # https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_canny/py_canny.html
 # https://scikit-image.org/docs/dev/auto_examples/filters/plot_hysteresis.html
-def edgeDetectionCanny(img: np.ndarray, thrs_1: float, thrs_2: float)-> (np.ndarray, np.ndarray):
+def edgeDetectionCanny(img: np.ndarray, thrs_1: float, thrs_2: float) -> (np.ndarray, np.ndarray):
+    filltered = gaussian_filter(img, sigma=3)
 
-    if(thrs_1>thrs_2) :
-        high = thrs_1
-        low = thrs_2
-    else:
-        high = thrs_2
-        low = thrs_1
+    first = (filltered * 255).astype(np.uint8)
+    cvans = cv2.Canny(first, thrs_1, thrs_2)
 
-    filltered = gaussian_filter(img, sigma=1)
-    (directions, magnitude, x_der, y_der) = convDerivative(filltered)
-    arr = non_max_suppression(magnitude, directions)
+    second = filltered * 50
 
-    myans = filters.apply_hysteresis_threshold(arr, low, high)
+    directions, magnitude, x_der, y_der = convDerivative(second)
+    magnitude = non_max_suppression(magnitude, x_der)
 
+    myans = hysteresis(magnitude, thrs_1, thrs_2)
 
-    cvans = cv2.Canny(img,low,high)
+    return cvans, myans
 
-    return (cvans, myans)
+# https://github.com/metinmertakcay/Canny_Edge_Detection/blob/master/main.py
+def non_max_suppression(gradient_magnitude, gradient_direction):
+    image_row, image_col,t = gradient_magnitude.shape
 
+    output = np.zeros(gradient_magnitude.shape)
 
+    PI = 180
 
-def smoothen(img):
+    for row in range(1, image_row - 1):
+        for col in range(1, image_col - 1):
+            direction = gradient_direction[row, col,0]
 
-    return cv2.Canny(img,100,150)
+            if (0 <= direction < PI / 8) or (15 * PI / 8 <= direction<= 2 * PI):
+                before_pixel = gradient_magnitude[row, col - 1]
+                after_pixel = gradient_magnitude[row, col + 1]
 
-def edge(img,threshold):
-    laplacian = np.array([[1,1,1],[1,-8,1],[1,1,1]])
-    sobel = np.array([[-1,0,1],[-2,0,2],[-1,0,1]])
+            elif (PI / 8 <= direction < 3 * PI / 8) or (9 * PI / 8 <= direction < 11 * PI / 8):
+                before_pixel = gradient_magnitude[row + 1, col - 1]
+                after_pixel = gradient_magnitude[row - 1, col + 1]
 
-    G_x = img.convolve(sobel)
-    G_y = img.convolve(np.fliplr(sobel).transpose())
+            elif (3 * PI / 8 <= direction < 5 * PI / 8) or (11 * PI / 8 <= direction < 13 * PI / 8):
+                before_pixel = gradient_magnitude[row - 1, col]
+                after_pixel = gradient_magnitude[row + 1, col]
 
-    G = pow((G_x*G_x + G_y*G_y),0.5)
+            else:
+                before_pixel = gradient_magnitude[row - 1, col - 1]
+                after_pixel = gradient_magnitude[row + 1, col + 1]
 
-    G[G<threshold] = 0
-    L = img.convolve(laplacian)
-    if L is None:
-        return
-    (M,N) = L.shape
+            if gradient_magnitude[row, col,0] >= before_pixel[0] and gradient_magnitude[row, col,0] >= after_pixel[0]:
+                output[row, col] = gradient_magnitude[row, col]
 
-    temp = np.zeros((M+2,N+2))
-    temp[1:-1,1:-1] = L
-    result = np.zeros((M,N))
-    for i in range(1,M+1):
-        for j in range(1,N+1):
-            if temp[i,j]<0:
-                for x,y in (-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1):
-                        if temp[i+x,j+y]>0:
-                            result[i-1,j-1] = 1
-    img.load(np.array(np.logical_and(result,G),dtype=np.uint8))
-    return img
+    return output
 
+def hysteresis(image, weak=50, strong=255):
+    print("- Hysteresis operation -")
+    output_image = copy(image)
+    for i in range(1, len(image) - 1):
+        for j in range(1, len(image[0]) - 1):
+            if (image[i][j][0] == weak):
+                if ((image[i+1][j-1] == strong) or (image[i+1][j] == strong) or (image[i+1][j+1] == strong)
+                 or (image[i][j-1] == strong) or (image[i][j+1] == strong)
+                 or (image[i-1][j-1] == strong) or (image[i-1][j] == strong) or (image[i-1][j+1] == strong)):
+                    output_image[i][j] = strong
+                else:
+                    output_image[i][j] = 0
+    return output_image
 
+def copy(image):
+    copy_image = []
+    for i in range(len(image)):
+        copy_image_col = []
+        for j in range(len(image[0])):
+            copy_image_col.append(image[i][j])
+        copy_image.append(copy_image_col)
+    return copy_image
 
 
 #https://en.wikipedia.org/wiki/Circle_Hough_Transform
@@ -398,6 +391,35 @@ def houghCircle(img: np.ndarray, min_radius: float, max_radius: float) -> list:
 
 
 
+def smoothen(img):
 
+    return cv2.Canny(img,100,150)
+
+def edge(img,threshold):
+    laplacian = np.array([[1,1,1],[1,-8,1],[1,1,1]])
+    sobel = np.array([[-1,0,1],[-2,0,2],[-1,0,1]])
+
+    G_x = img.convolve(sobel)
+    G_y = img.convolve(np.fliplr(sobel).transpose())
+
+    G = pow((G_x*G_x + G_y*G_y),0.5)
+
+    G[G<threshold] = 0
+    L = img.convolve(laplacian)
+    if L is None:
+        return
+    (M,N) = L.shape
+
+    temp = np.zeros((M+2,N+2))
+    temp[1:-1,1:-1] = L
+    result = np.zeros((M,N))
+    for i in range(1,M+1):
+        for j in range(1,N+1):
+            if temp[i,j]<0:
+                for x,y in (-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1):
+                        if temp[i+x,j+y]>0:
+                            result[i-1,j-1] = 1
+    img.load(np.array(np.logical_and(result,G),dtype=np.uint8))
+    return img
 
 
