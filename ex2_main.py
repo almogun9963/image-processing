@@ -106,18 +106,21 @@ def test_edgeDetectionCanny():
     plt.show()
 
 def test_houghCircle():
-    circles = ex2_utils.imReadAndConvert("coins.jpg", 1)
-    hc = ex2_utils.houghCircle(circles, 1, 10)
-    #cvhc = cv2.HoughCircles(circles, cv2.HOUGH_GRADIENT, 1, 20,param1=50, param2=30, minRadius=1, maxRadius=10)
 
-    plt.imshow(circles, cmap='gray')
-    plt.title('Original Image'), plt.xticks([]), plt.yticks([])
+    img = ex2_utils.imReadAndConvert("coins.jpg", 1)
+    smoothed_img = gaussian_filter(img, sigma=2)
+    smoothed_img = (smoothed_img * 255).astype(np.uint8)
+    edged_image = cv2.Canny(smoothed_img, 100, 200)
+
+    circles = ex2_utils.houghCircle(edged_image, 1,10)
+
+    for ver in circles:
+        plt.imshow((ver * 255).astype(np.uint8), cmap='gray')
+
     plt.show()
-    plt.subplot(121), plt.imshow(hc, cmap='gray')
-    plt.title('my hough Circle Image'), plt.xticks([]), plt.yticks([])
-    #plt.subplot(122), plt.imshow(cvhc, cmap='gray')
-    #plt.title('opencv hough Circle Image'), plt.xticks([]), plt.yticks([])
-    plt.show()
+
+
+
 def test_blurImage1():
     img = ex2_utils.imReadAndConvert("opencv.png", 1)
     kernel = np.array([[1, 0, -1], [1, 0, -1], [1, 0, -1]])
@@ -142,16 +145,16 @@ def test_blurImage2():
 
 
 def main():
-    #test_conv1D()
-    #test_conv2D()
-    #test_convDerivative()
-    #test_edgeDetectionSobel()
-    #test_edgeDetectionZeroCrossingSimple()
-    #test_edgeDetectionZeroCrossingLOG()
+    test_conv1D()
+    test_conv2D()
+    test_convDerivative()
+    test_blurImage1()
+    test_blurImage2()
+    test_edgeDetectionSobel()
+    test_edgeDetectionZeroCrossingSimple()
+    test_edgeDetectionZeroCrossingLOG()
     test_edgeDetectionCanny()
-    #test_houghCircle()
-    #test_blurImage1()
-    #test_blurImage2()
+    test_houghCircle()
 
 if __name__ == '__main__':
     main()

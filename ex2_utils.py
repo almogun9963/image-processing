@@ -324,7 +324,7 @@ def edgeDetectionCanny(img: np.ndarray, thrs_1: float, thrs_2: float) -> (np.nda
     second = filltered * 50
 
     directions, magnitude, x_der, y_der = convDerivative(second)
-    magnitude = non_max_suppression(magnitude, x_der)
+    magnitude = non_max_suppression(magnitude, directions)
 
     myans = hysteresis(magnitude, thrs_1, thrs_2)
 
@@ -363,122 +363,21 @@ def non_max_suppression(gradient_magnitude, gradient_direction):
 
     return output
 
-def hysteresis(image, weak=50, strong=255):
-    print("- Hysteresis operation -")
-    output_image = copy(image)
+def hysteresis(image, weak=0, strong=255):
+    output_image = np.copy(image)
     for i in range(1, len(image) - 1):
         for j in range(1, len(image[0]) - 1):
-            if (image[i][j] == weak):
+            if (image[i][j] > weak ):
+
                 if ((image[i+1][j-1] == strong) or (image[i+1][j] == strong) or (image[i+1][j+1] == strong)
                  or (image[i][j-1] == strong) or (image[i][j+1] == strong)
                  or (image[i-1][j-1] == strong) or (image[i-1][j] == strong) or (image[i-1][j+1] == strong)):
-                    output_image[i][j] = strong
+                    output_image[i][j] = weak
                 else:
-                    output_image[i][j] = 0
+                    output_image[i][j] = strong
     return output_image
 
-def copy(image):
-    copy_image = []
-    for i in range(len(image)):
-        copy_image_col = []
-        for j in range(len(image[0])):
-            copy_image_col.append(image[i][j])
-        copy_image.append(copy_image_col)
-    return copy_image
 
-
-#https://en.wikipedia.org/wiki/Circle_Hough_Transform
-#https://github.com/PavanGJ/Circle-Hough-Transform/blob/master/main.py
-#https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_houghcircles/py_houghcircles.html
-# def houghCircle(img: np.ndarray, min_radius: float, max_radius: float) -> list:
-#     #circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, minRadius=min_radius, maxRadius=max_radius)
-#     #canny = cv2.Canny(img)
-#
-#     #voting = np.zeros(shape=(canny.shape[0],canny.shape[1] ,max_radius - min_radius ))
-#     #for x in range(canny.shape[0]):
-#     #    for y in range(canny.shape[1]):
-#     #        for radius in (min_radius,max_radius):
-#     #            for theta in(0,360):
-#
-#     #                a = x - radius * radius * math.cos(theta * math.pi / 180);
-#     #                b = y - radius * math.sin(theta * math.pi / 180);
-#     #                voting[a,b,radius] +=1
-#
-#     region = 15
-#     threshold = 8.1
-#
-#     res = smoothen(img)
-#     res = edge(res, 128)
-#     (M, N) = res.shape
-#     R = max_radius - min_radius
-#     A = np.zeros((max_radius, M + 2 * max_radius, N + 2 * max_radius))
-#     B = np.zeros((max_radius, M + 2 * max_radius, N + 2 * max_radius))
-#     theta = np.arange(0, 360) * np.pi / 180
-#     edges = np.argwhere(res[:, :])
-#     for val in range(R):
-#         r = min_radius + val
-#
-#         bprint = np.zeros((2 * (r + 1), 2 * (r + 1)))
-#         (m, n) = (r + 1, r + 1)
-#         for angle in theta:
-#             x = int(np.round(r * np.cos(angle)))
-#             y = int(np.round(r * np.sin(angle)))
-#             bprint[m + x, n + y] = 1
-#         constant = np.argwhere(bprint).shape[0]
-#         for x, y in edges:
-#             X = [x - m + max_radius, x + m + max_radius]
-#             Y = [y - n + max_radius, y + n + max_radius]
-#             A[r, X[0]:X[1], Y[0]:Y[1]] += bprint
-#         A[r][A[r] < threshold * constant / r] = 0
-#
-#     for r, x, y in np.argwhere(A):
-#         temp = A[r - region:r + region, x - region:x + region, y - region:y + region]
-#         try:
-#             p, a, b = np.unravel_index(np.argmax(temp), temp.shape)
-#         except:
-#             continue
-#         B[r + (p - region), x + (a - region), y + (b - region)] = 1
-#
-#     return B[:, max_radius:-max_radius, max_radius:-max_radius]
-#
-#
-#
-# def smoothen(img):
-#
-#     gaussian = np.array([[1/16.,1/8.,1/16.],[1/8.,1/4.,1/8.],[1/16.,1/8.,1/16.]])
-#     img = np.array(img)
-#     smooth = cv2.filter2D(img,-1,gaussian)
-#
-#     return smooth
-#
-# def edge(img,threshold):
-#
-#     laplacian = np.array([[1,1,1],[1,-8,1],[1,1,1]])
-#     sobel = np.array([[-1,0,1],[-2,0,2],[-1,0,1]])
-#
-#     G_x = cv2.filter2D(img,-1,sobel)
-#
-#     G_y = cv2.filter2D(img,-1,sobel.transpose())
-#
-#     G = pow((G_x*G_x + G_y*G_y),0.5)
-#
-#     G[G<threshold] = 0
-#     L = cv2.filter2D(img,-1,laplacian)
-#     if L is None:
-#         return
-#     (M,N) = L.shape
-#
-#     temp = np.zeros((M+2,N+2))
-#     temp[1:-1,1:-1] = L
-#     result = np.zeros((M,N))
-#     for i in range(1,M+1):
-#         for j in range(1,N+1):
-#             if temp[i,j]<0:
-#                 for x,y in (-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1):
-#                         if temp[i+x,j+y]>0:
-#                             result[i-1,j-1] = 1
-#
-#     return img
 
 """
 Find Circles in an image using a Hough Transform algorithm extension
@@ -488,7 +387,84 @@ Find Circles in an image using a Hough Transform algorithm extension
 :return: A list containing the detected circles,
 [(x,y,radius),(x,y,radius),...]
 """
+#https://en.wikipedia.org/wiki/Circle_Hough_Transform
+#https://github.com/PavanGJ/Circle-Hough-Transform/blob/master/main.py
+#https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_houghcircles/py_houghcircles.html
+def houghCircle(img: np.ndarray, min_radius: float, max_radius: float) -> list:
+    region = 15
+    threshold = 8.1
 
-def houghCircle(img:np.ndarray,min_radius:float,max_radius:float)->list:
+    res = smoothen(img)
+    res = edge(res, 128)
+    (M, N) = res.shape
+    R = max_radius - min_radius
+    A = np.zeros(( M + 2 * max_radius, N + 2 * max_radius,max_radius))
+    B = np.zeros(( M + 2 * max_radius, N + 2 * max_radius,max_radius))
+    theta = np.arange(0, 360) * np.pi / 180
+    edges = np.argwhere(res[:, :])
+    for val in range(R):
+        r = min_radius + val
 
-  
+        bprint = np.zeros((2 * (r + 1), 2 * (r + 1)))
+        (m, n) = (r + 1, r + 1)
+        for angle in theta:
+            x = int(np.round(r * np.cos(angle)))
+            y = int(np.round(r * np.sin(angle)))
+            bprint[m + x, n + y] = 1
+        constant = np.argwhere(bprint).shape[0]
+        for x, y in edges:
+            X = [x - m + max_radius, x + m + max_radius]
+            Y = [y - n + max_radius, y + n + max_radius]
+            A[ X[0]:X[1], Y[0]:Y[1],r] += bprint
+        A[r][A[r] < threshold * constant / r] = 0
+
+    for r, x, y in np.argwhere(A):
+        temp = A[ x - region:x + region, y - region:y + region,r - region:r + region]
+        try:
+            p, a, b = np.unravel_index(np.argmax(temp), temp.shape)
+        except:
+            continue
+        B[ x + (a - region), y + (b - region),r + (p - region)] = 1
+
+    return B
+
+
+
+def smoothen(img):
+
+    gaussian = np.array([[1/16.,1/8.,1/16.],[1/8.,1/4.,1/8.],[1/16.,1/8.,1/16.]])
+    img = np.array(img)
+    smooth = cv2.filter2D(img,-1,gaussian)
+
+    return smooth
+
+def edge(img,threshold):
+
+    laplacian = np.array([[1,1,1],[1,-8,1],[1,1,1]])
+    sobel = np.array([[-1,0,1],[-2,0,2],[-1,0,1]])
+
+    G_x = cv2.filter2D(img,-1,sobel)
+
+    G_y = cv2.filter2D(img,-1,sobel.transpose())
+
+    G = pow((G_x*G_x + G_y*G_y),0.5)
+
+    G[G<threshold] = 0
+    L = cv2.filter2D(img,-1,laplacian)
+    if L is None:
+        return
+    (M,N) = L.shape
+
+    temp = np.zeros((M+2,N+2))
+    temp[1:-1,1:-1] = L
+    result = np.zeros((M,N))
+    for i in range(1,M+1):
+        for j in range(1,N+1):
+            if temp[i,j]<0:
+                for x,y in (-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1):
+                        if temp[i+x,j+y]>0:
+                            result[i-1,j-1] = 1
+
+    return img
+
+
